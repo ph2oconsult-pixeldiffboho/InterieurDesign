@@ -16,21 +16,41 @@ type WizardStep = 'welcome' | 'setup' | 'rooms' | 'quickstart' | 'report';
 
 export default function App() {
   const [step, setStep] = useState<WizardStep>(() => {
-    const saved = localStorage.getItem('interieur_step');
-    return (saved as WizardStep) || 'welcome';
+    try {
+      const saved = localStorage.getItem('interieur_step');
+      return (saved as WizardStep) || 'welcome';
+    } catch (e) {
+      console.error('Failed to load step from localStorage', e);
+      return 'welcome';
+    }
   });
   const [currentRoom, setCurrentRoom] = useState<RoomDesignData | null>(() => {
-    const saved = localStorage.getItem('interieur_current_room');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('interieur_current_room');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error('Failed to load currentRoom from localStorage', e);
+      return null;
+    }
   });
   const [project, setProject] = useState<ProjectData>(() => {
-    const saved = localStorage.getItem('interieur_project');
-    return saved ? JSON.parse(saved) : {
-      projectName: '',
-      propertyAge: '',
-      floorPlanImage: null,
-      rooms: []
-    };
+    try {
+      const saved = localStorage.getItem('interieur_project');
+      return saved ? JSON.parse(saved) : {
+        projectName: '',
+        propertyAge: '',
+        floorPlanImage: null,
+        rooms: []
+      };
+    } catch (e) {
+      console.error('Failed to load project from localStorage', e);
+      return {
+        projectName: '',
+        propertyAge: '',
+        floorPlanImage: null,
+        rooms: []
+      };
+    }
   });
 
   // Sync to local storage
@@ -39,6 +59,13 @@ export default function App() {
     localStorage.setItem('interieur_project', JSON.stringify(project));
     localStorage.setItem('interieur_current_room', JSON.stringify(currentRoom));
   }, [step, project, currentRoom]);
+
+  // Safety: Redirect to welcome if in report step without currentRoom
+  React.useEffect(() => {
+    if (step === 'report' && !currentRoom) {
+      setStep('rooms');
+    }
+  }, [step, currentRoom]);
 
   const handleStart = () => setStep('setup');
   
