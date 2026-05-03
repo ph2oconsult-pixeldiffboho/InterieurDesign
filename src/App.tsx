@@ -55,9 +55,27 @@ export default function App() {
 
   // Sync to local storage
   React.useEffect(() => {
-    localStorage.setItem('interieur_step', step);
-    localStorage.setItem('interieur_project', JSON.stringify(project));
-    localStorage.setItem('interieur_current_room', JSON.stringify(currentRoom));
+    try {
+      localStorage.setItem('interieur_step', step);
+
+      // Strip heavy base64 fields before persisting
+      const projectLite = {
+        ...project,
+        floorPlanImage: null,
+        rooms: project.rooms.map(r => ({
+          ...r,
+          referenceImages: undefined,
+        })),
+      };
+      localStorage.setItem('interieur_project', JSON.stringify(projectLite));
+
+      const roomLite = currentRoom
+        ? { ...currentRoom, referenceImages: undefined }
+        : null;
+      localStorage.setItem('interieur_current_room', JSON.stringify(roomLite));
+    } catch (e) {
+      console.warn('localStorage write failed (likely quota):', e);
+    }
   }, [step, project, currentRoom]);
 
   // Safety: Redirect to welcome if in report step without currentRoom
@@ -92,20 +110,19 @@ export default function App() {
 
   const handleRestart = () => {
     if (confirm("This will permanently clear all project data and renders. Proceed?")) {
-      setProject({
-        projectName: '',
-        propertyAge: '',
-        floorPlanImage: null,
-        rooms: []
-      });
+      setProject({ projectName: '', propertyAge: '', floorPlanImage: null, rooms: [] });
       setCurrentRoom(null);
       setStep('welcome');
-      localStorage.clear();
+      ['interieur_step', 'interieur_project', 'interieur_current_room']
+        .forEach(k => localStorage.removeItem(k));
     }
   };
 
   return (
     <div className="min-h-screen">
+      <div className="bg-red-500 text-white text-xs text-center py-1 font-bold tracking-wider">
+        DEVELOPMENT BUILD: API Key is exposed to the client. Do not deploy this URL publicly.
+      </div>
       <AnimatePresence mode="wait">
         {step === 'welcome' && (
           <motion.div key="welcome" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

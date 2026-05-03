@@ -1,20 +1,7 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Intèrieur Design
 
-# Run and deploy your AI Studio app
+An exquisite interior design tool using the Gemini API.
 
-This contains everything you need to run your app locally.
+## Security Warning
 
-View your app in AI Studio: https://ai.studio/apps/85b37741-9739-4a29-93e1-9cbbff91e748
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+**Important Note for Developers:** This application exposes the `GEMINI_API_KEY` to the browser environment for development inside AI Studio. Do not deploy this application publicly without moving the API calls behind a proxy server to secure your API key.

@@ -4,6 +4,8 @@ import { ChevronLeft, ChevronRight, Download, Package, Palette, Ruler, Sparkles,
 import { APP_VERSION } from '../constants';
 import { ProjectData, RoomDesignData, DesignReport as IDesignReport } from '../types';
 import { analyzeRoomLayout, generateRoomRender } from '../services/geminiService';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 interface ReportViewProps {
   project: ProjectData;
@@ -15,25 +17,24 @@ interface ReportViewProps {
 export default function ReportView({ project, room, onDesignAnother, onRestart }: ReportViewProps) {
   const [report, setReport] = useState<IDesignReport | null>(null);
   const [status, setStatus] = useState<'analyzing' | 'rendering' | 'complete' | 'error'>('analyzing');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       setStatus('analyzing');
       setErrorMessage(null);
       try {
         const result = await analyzeRoomLayout(project, room);
+        if (cancelled) return;
         setStatus('rendering');
         
-        // Initial buffer delay to space out from the analysis call
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Generate renders sequentially with significant delay to avoid rate limits
         const renderUrl = await generateRoomRender(result.renderPrompt, project.floorPlanImage || undefined);
-        
-        // Very large delay (15 seconds) for breathing room given the intense image generation tasks and quota limits
-        await new Promise(resolve => setTimeout(resolve, 15000));
+        if (cancelled) return;
         
         const secondaryUrl = await generateRoomRender(result.secondaryRenderPrompt, project.floorPlanImage || undefined);
+        if (cancelled) return;
 
         setReport({ 
           ...result, 
@@ -42,6 +43,7 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
         });
         setStatus('complete');
       } catch (err: any) {
+        if (cancelled) return;
         console.error(err);
         let message = "An unexpected error occurred during spatial analysis. This may be due to high demand or an issue with the floor plan clarity.";
         
@@ -56,9 +58,9 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
       }
     };
     load();
-  }, [project, room]);
-
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const downloadImage = (url?: string, suffix: string = 'Primary') => {
     if (!url) return;
@@ -68,26 +70,47 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
     link.click();
   };
 
-  const exportBOM = () => {
-    const data = {
-      project: {
-        name: project.projectName,
-        age: project.propertyAge,
-      },
-      room: {
-        type: room.type,
-        style: room.style,
-        layout: report?.layoutDescription,
-        materials: report?.materialList,
-        colors: report?.wallColors,
+  const exportPDF = async () => {
+    const element = document.getElementById('report-content');
+    if (!element) return;
+    
+    setIsExporting(true);
+    try {
+      // Small delay to ensure any fonts/images are ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#FCFCF9' // paper color
+      });
+
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
       }
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${project.projectName}-${room.type}-Specs.json`;
-    link.click();
+
+      pdf.save(`${project.projectName}-${room.type}-Specs.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF", error);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (status === 'error') {
@@ -157,7 +180,7 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
                 className="h-full bg-accent w-1/2"
               />
             </div>
-            <p className="text-[9px] text-ink/20 font-bold uppercase tracking-widest italic tracking-wider">Property: {project.projectName} • {project.propertyAge}</p>
+            <p className="text-[9px] text-ink/20 font-bold uppercase tracking-widest italic">Property: {project.projectName} • {project.propertyAge}</p>
           </div>
         </div>
       </div>
@@ -191,7 +214,7 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-8 grid grid-cols-1 lg:grid-cols-12 gap-16">
+      <main id="report-content" className="max-w-7xl mx-auto px-8 grid grid-cols-1 lg:grid-cols-12 gap-16">
         {/* Render View */}
         <div className="lg:col-span-8 space-y-12">
           <section className="space-y-8">
@@ -326,6 +349,22 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
                 <p className="text-[8px] uppercase tracking-widest text-ink/30 font-bold mt-2">Rads</p>
               </div>
             </div>
+            
+            <div className="space-y-4 pt-4 border-t border-ink/5">
+              {report?.structuralAudit?.dimensionsAndCeilingHeight && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-ink/30 font-bold mb-1">Dimensions & Ceiling</p>
+                  <p className="text-xs text-ink/70 serif-italic">{report.structuralAudit.dimensionsAndCeilingHeight}</p>
+                </div>
+              )}
+              {report?.structuralAudit?.restrictions && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-ink/30 font-bold mb-1">Key Restrictions</p>
+                  <p className="text-xs text-red-500/80 serif-italic">{report.structuralAudit.restrictions}</p>
+                </div>
+              )}
+            </div>
+
             {report?.structuralAudit?.other && (
               <p className="px-4 py-2 bg-accent/5 border-l border-accent text-[10px] text-accent/80 italic serif-italic">
                 "{report.structuralAudit.other}"
@@ -374,10 +413,12 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
             </div>
 
             <button 
-              onClick={exportBOM}
-              className="w-full py-5 border-2 border-ink text-ink text-[11px] uppercase tracking-widest font-bold hover:bg-ink hover:text-white transition-all flex items-center justify-center gap-3 group"
+              onClick={exportPDF}
+              disabled={isExporting}
+              className={`w-full py-5 border-2 border-ink text-ink text-[11px] uppercase tracking-widest font-bold transition-all flex items-center justify-center gap-3 group ${isExporting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-ink hover:text-white'}`}
             >
-              <CheckCircle2 className="w-4 h-4 text-accent" /> Export Full Bill of Materials
+              <CheckCircle2 className="w-4 h-4 text-accent" /> 
+              {isExporting ? 'Generating PDF...' : 'Export Full Spec to PDF'}
             </button>
           </section>
         </div>

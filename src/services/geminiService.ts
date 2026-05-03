@@ -1,7 +1,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ProjectData, RoomDesignData, DesignReport } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "AIzaSyBioo_UmTbBTma_RfaOjbagGUXb66MVDK8" });
+const userProvidedKey = "AIzaSyBioo_UmTbBTma_RfaOjbagGUXb66MVDK8";
+const apiKey = userProvidedKey || process.env.GEMINI_API_KEY;
+const ai = new GoogleGenAI({ apiKey });
+
+function parseDataUrl(dataUrl: string): { mimeType: string; data: string } {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) {
+    return { mimeType: 'image/png', data: dataUrl };
+  }
+  return { mimeType: match[1], data: match[2] };
+}
 
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 5): Promise<T> {
   let lastError: any;
@@ -65,7 +75,7 @@ export async function analyzeRoomLayout(
       - Consistency Invariant: Both prompts MUST describe identical window/door placement.
 
       Task:
-      1. Structural & Scale Analysis: Identify DOORS, WINDOWS, and FIXED FEATURES. Ignore dimension lines.
+      1. Structural & Scale Analysis: Identify room dimensions, ceiling height, DOORS, WINDOWS, and FIXED FEATURES from the floor plan and provided details. Ignore dimension lines from being considered windows. Identify key structural restrictions.
       2. Propose a precise furniture layout that fits within these bounds.
       3. Define the 'visualIdentity'.
       4. Generate TWO Photorealistic Rendering Prompts:
@@ -80,24 +90,25 @@ export async function analyzeRoomLayout(
     const parts: any[] = [];
     
     if (project.floorPlanImage) {
+      const { mimeType, data } = parseDataUrl(project.floorPlanImage);
       parts.push({
         inlineData: {
-          data: project.floorPlanImage.split(',')[1],
-          mimeType: "image/png"
+          data,
+          mimeType
         }
       });
-      parts.push({ text: "[IDENTIFIER: Floor Plan] - CRITICAL: Analyze this image for all doors, windows, and structural boundaries. This is the only source for room shape." });
+      parts.push({ text: "[IDENTIFIER: Floor Plan] - CRITICAL: Analyze this image for all doors, windows, and structural boundaries. This is the only source for room shape. Estimate room dimensions and ceiling height based on architectural standards unless specified." });
     }
 
     // Add Reference Images if available
     if (room.referenceImages && room.referenceImages.length > 0) {
       room.referenceImages.forEach((img, idx) => {
-        const partsArr = img.split(",");
-        if (partsArr.length > 1) {
+        const { mimeType, data } = parseDataUrl(img);
+        if (data) {
           parts.push({
             inlineData: {
-              data: partsArr[1],
-              mimeType: "image/png",
+              data,
+              mimeType,
             }
           });
           parts.push({ text: `[IDENTIFIER: Reference Image ${idx + 1}] - Visual cue for style/furniture.` });
@@ -125,9 +136,11 @@ export async function analyzeRoomLayout(
                 doors: { type: Type.NUMBER },
                 windows: { type: Type.NUMBER },
                 radiators: { type: Type.NUMBER },
-                other: { type: Type.STRING }
+                other: { type: Type.STRING },
+                dimensionsAndCeilingHeight: { type: Type.STRING, description: "Estimated room dimensions and ceiling height." },
+                restrictions: { type: Type.STRING, description: "Key restrictions or constraints identified." }
               },
-              required: ["doors", "windows", "radiators", "other"]
+              required: ["doors", "windows", "radiators", "other", "dimensionsAndCeilingHeight", "restrictions"]
             },
             materialList: {
               type: Type.ARRAY,
@@ -172,7 +185,11 @@ export async function analyzeRoomLayout(
     }
     
     try {
-      return JSON.parse(text);
+      const parsed = JSON.parse(text);
+      if (!parsed.renderPrompt || !parsed.secondaryRenderPrompt) {
+        throw new Error("Render prompts missing from analysis. Please try again.");
+      }
+      return parsed;
     } catch (e) {
       console.error("Failed to parse Gemini response:", text);
       throw new Error("Detailed architectural analysis could not be parsed. Please try again.");
@@ -185,11 +202,11 @@ export async function generateRoomRender(prompt: string, floorPlanImage?: string
     const parts: any[] = [];
     
     if (floorPlanImage) {
-      const base64Data = floorPlanImage.includes(',') ? floorPlanImage.split(',')[1] : floorPlanImage;
+      const { mimeType, data } = parseDataUrl(floorPlanImage);
       parts.push({
         inlineData: {
-          data: base64Data,
-          mimeType: "image/png"
+          data,
+          mimeType
         }
       });
       parts.push({ text: "GROUND TRUTH FLOOR PLAN: Use this image as the absolute architectural map. Respect the window and door counts exactly. If the plan shows 2 windows, the render MUST show 2 windows. Dimension lines (thin lines with numbers) are NOT windows." });
@@ -214,8 +231,9 @@ export async function generateRoomRender(prompt: string, floorPlanImage?: string
     });
 
     const candidates = response.candidates;
-    if (candidates && candidates.length > 0) {
-      for (const part of candidates[0].content.parts) {
+    const responseParts = candidates?.[0]?.content?.parts;
+    if (responseParts) {
+      for (const part of responseParts) {
         if (part.inlineData) {
           return `data:image/png;base64,${part.inlineData.data}`;
         }

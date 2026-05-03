@@ -37,7 +37,14 @@ export interface ProjectData {
 
 export interface DesignReport {
   layoutDescription: string;
-  structuralAudit: { doors: number; windows: number; radiators: number; other: string };
+  structuralAudit: { 
+    doors: number; 
+    windows: number; 
+    radiators: number; 
+    other: string;
+    dimensionsAndCeilingHeight: string;
+    restrictions: string;
+  };
   materialList: { name: string; quantity: string; dimensions: string }[];
   wallColors: { name: string; hex: string; brand: string }[];
   visualIdentity: string;
