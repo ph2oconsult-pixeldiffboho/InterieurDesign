@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { ArrowRight, Compass, Home, Layout } from 'lucide-react';
+import { APP_VERSION } from '../constants';
 
 interface WelcomeProps {
   onStart: () => void;
@@ -53,6 +54,10 @@ export default function Welcome({ onStart }: WelcomeProps) {
           <div className="absolute inset-0 bg-accent transform translate-y-full transition-transform group-hover:translate-y-0 duration-500" />
         </button>
       </motion.div>
+
+      <div className="absolute bottom-8 right-8 text-[9px] uppercase tracking-[0.2em] font-bold text-ink/20 font-mono">
+        v{APP_VERSION} PREVIEW
+      </div>
     </div>
   );
 }

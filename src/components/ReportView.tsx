@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Download, Package, Palette, Ruler, Sparkles, CheckCircle2, Layout, Plus } from 'lucide-react';
+import { APP_VERSION } from '../constants';
 import { ProjectData, RoomDesignData, DesignReport as IDesignReport } from '../types';
 import { analyzeRoomLayout, generateRoomRender } from '../services/geminiService';
 
@@ -18,25 +19,52 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
   useEffect(() => {
     const load = async () => {
       setStatus('analyzing');
+      setErrorMessage(null);
       try {
         const result = await analyzeRoomLayout(project, room);
         setStatus('rendering');
-        const renderUrl = await generateRoomRender(result.renderPrompt);
-        setReport({ ...result, renderImageUrl: renderUrl });
+        
+        // Initial buffer delay to space out from the analysis call
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Generate renders sequentially with significant delay to avoid rate limits
+        const renderUrl = await generateRoomRender(result.renderPrompt, project.floorPlanImage || undefined);
+        
+        // Very large delay (15 seconds) for breathing room given the intense image generation tasks and quota limits
+        await new Promise(resolve => setTimeout(resolve, 15000));
+        
+        const secondaryUrl = await generateRoomRender(result.secondaryRenderPrompt, project.floorPlanImage || undefined);
+
+        setReport({ 
+          ...result, 
+          renderImageUrl: renderUrl, 
+          secondaryRenderImageUrl: secondaryUrl 
+        });
         setStatus('complete');
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
+        let message = "An unexpected error occurred during spatial analysis. This may be due to high demand or an issue with the floor plan clarity.";
+        
+        if (err?.message?.includes("429") || err?.status === 429 || err?.message?.includes("RESOURCE_EXHAUSTED")) {
+          message = "AI Studio Engine is at capacity. Your minute/daily quota has been reached. Please wait a moment or check your Gemini API plan.";
+        } else if (err?.message?.includes("quota")) {
+          message = "Your Gemini API quota has been exceeded. Please check your billing details or wait for the quota to reset.";
+        }
+        
+        setErrorMessage(message);
         setStatus('error');
       }
     };
     load();
   }, [project, room]);
 
-  const downloadImage = () => {
-    if (!report?.renderImageUrl) return;
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const downloadImage = (url?: string, suffix: string = 'Primary') => {
+    if (!url) return;
     const link = document.createElement('a');
-    link.href = report.renderImageUrl;
-    link.download = `${project.projectName}-${room.type}-Render.png`;
+    link.href = url;
+    link.download = `${project.projectName}-${room.type}-${suffix}.png`;
     link.click();
   };
 
@@ -61,6 +89,39 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
     link.download = `${project.projectName}-${room.type}-Specs.json`;
     link.click();
   };
+
+  if (status === 'error') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-paper p-12">
+        <div className="text-center space-y-8 max-w-lg">
+          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full mx-auto flex items-center justify-center">
+            <Plus className="w-8 h-8 rotate-45" />
+          </div>
+          <div className="space-y-4">
+            <h2 className="text-4xl font-light italic">Analysis Interrupted</h2>
+            <p className="text-red-500 uppercase text-[10px] tracking-[0.4em] font-bold">Studio Engine Error</p>
+          </div>
+          <p className="text-ink/60 text-sm leading-relaxed serif-italic px-8">
+            {errorMessage || "An unexpected error occurred during spatial analysis. This may be due to high demand or an issue with the floor plan clarity."}
+          </p>
+          <div className="pt-8 flex flex-col gap-4 items-center">
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full max-w-xs px-8 py-4 bg-ink text-white text-xs uppercase tracking-widest font-bold hover:bg-accent transition-colors"
+            >
+              Try Again
+            </button>
+            <button 
+              onClick={onRestart}
+              className="text-xs uppercase tracking-widest font-bold text-ink/40 hover:text-ink transition-colors"
+            >
+              Return to Studio
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (status === 'analyzing' || status === 'rendering' || !report) {
     const messages = {
@@ -111,6 +172,8 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
           <h1 className="text-2xl font-light leading-none">Project: <span className="serif-italic">{project.projectName}</span></h1>
           <div className="h-4 w-px bg-ink/10 hidden md:block" />
           <p className="text-[10px] uppercase tracking-widest text-ink/40 font-bold hidden md:block">{project.propertyAge}</p>
+          <div className="h-4 w-px bg-ink/10 hidden md:block" />
+          <p className="text-[9px] uppercase tracking-widest text-ink/20 font-bold hidden md:block">v{APP_VERSION}</p>
         </div>
         <div className="flex items-center gap-8">
           <button onClick={onDesignAnother} className="text-[11px] tracking-widest uppercase text-accent hover:text-ink transition-colors font-bold flex items-center gap-2 group">
@@ -131,34 +194,68 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
       <main className="max-w-7xl mx-auto px-8 grid grid-cols-1 lg:grid-cols-12 gap-16">
         {/* Render View */}
         <div className="lg:col-span-8 space-y-12">
-          <section className="space-y-6">
-            <div className="flex justify-between items-end">
-              <h3 className="text-xs uppercase tracking-[0.4em] font-bold text-ink/30">Atmospheric Visualization</h3>
-              <span className="flex items-center gap-2 text-[10px] text-accent tracking-widest font-bold">
-                <Sparkles className="w-3 h-3" /> AI GENERATED CONCEPT
-              </span>
-            </div>
-            <div className="aspect-video bg-ink/5 rounded-2xl overflow-hidden shadow-2xl relative group">
-              {report?.renderImageUrl ? (
-                <img 
-                  src={report.renderImageUrl} 
-                  alt="Room Render" 
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
-                  <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                  <p className="text-xs text-ink/30 italic">Developing high-fidelity render...</p>
+          <section className="space-y-8">
+            <div className="space-y-6">
+              <div className="flex justify-between items-end">
+                <h3 className="text-xs uppercase tracking-[0.4em] font-bold text-ink/30">Primary Architectural Angle</h3>
+                <span className="flex items-center gap-2 text-[10px] text-accent tracking-widest font-bold">
+                  <Sparkles className="w-3 h-3" /> CONCEPT 01
+                </span>
+              </div>
+              <div className="aspect-video bg-ink/5 rounded-2xl overflow-hidden shadow-2xl relative group">
+                {report?.renderImageUrl ? (
+                  <img 
+                    src={report.renderImageUrl} 
+                    alt="Primary Render" 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
+                    <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    <p className="text-xs text-ink/30 italic">Developing primary angle...</p>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                  <button 
+                    onClick={() => downloadImage(report?.renderImageUrl, 'Primary')}
+                    className="px-8 py-4 bg-white text-ink text-xs uppercase tracking-widest font-bold flex items-center gap-3 active:scale-95 transition-transform"
+                  >
+                    <Download className="w-4 h-4" /> Download View 01
+                  </button>
                 </div>
-              )}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                <button 
-                  onClick={downloadImage}
-                  className="px-8 py-4 bg-white text-ink text-xs uppercase tracking-widest font-bold flex items-center gap-3 active:scale-95 transition-transform"
-                >
-                  <Download className="w-4 h-4" /> Download 4K Render
-                </button>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex justify-between items-end">
+                <h3 className="text-xs uppercase tracking-[0.4em] font-bold text-ink/30">Reverse Perspective View</h3>
+                <span className="flex items-center gap-2 text-[10px] text-ink/20 tracking-widest font-bold">
+                  CONCEPT 02
+                </span>
+              </div>
+              <div className="aspect-video bg-ink/5 rounded-2xl overflow-hidden shadow-2xl relative group">
+                {report?.secondaryRenderImageUrl ? (
+                  <img 
+                    src={report.secondaryRenderImageUrl} 
+                    alt="Secondary Render" 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
+                    <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    <p className="text-xs text-ink/30 italic">Developing reverse angle...</p>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                  <button 
+                    onClick={() => downloadImage(report?.secondaryRenderImageUrl, 'Reverse')}
+                    className="px-8 py-4 bg-white text-ink text-xs uppercase tracking-widest font-bold flex items-center gap-3 active:scale-95 transition-transform"
+                  >
+                    <Download className="w-4 h-4" /> Download View 02
+                  </button>
+                </div>
               </div>
             </div>
           </section>
@@ -208,7 +305,37 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
         </div>
 
         {/* Specs & Material List */}
-        <div className="lg:col-span-4 space-y-12">
+        <div className="lg:col-span-4 space-y-8">
+          {/* Architectural Audit */}
+          <section className="p-8 rounded-2xl bg-white border luxury-border space-y-6 shadow-sm">
+            <div className="flex items-center gap-3">
+              <Ruler className="w-5 h-5 text-accent" />
+              <h3 className="text-[11px] uppercase tracking-widest font-bold">Structural Audit</h3>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-3 bg-ink/[0.02] border border-ink/[0.05]">
+                <p className="text-2xl font-serif italic text-accent leading-none">{report?.structuralAudit?.doors || 0}</p>
+                <p className="text-[8px] uppercase tracking-widest text-ink/30 font-bold mt-2">Doors</p>
+              </div>
+              <div className="text-center p-3 bg-ink/[0.02] border border-ink/[0.05]">
+                <p className="text-2xl font-serif italic text-accent leading-none">{report?.structuralAudit?.windows || 0}</p>
+                <p className="text-[8px] uppercase tracking-widest text-ink/30 font-bold mt-2">Windows</p>
+              </div>
+              <div className="text-center p-3 bg-ink/[0.02] border border-ink/[0.05]">
+                <p className="text-2xl font-serif italic text-accent leading-none">{report?.structuralAudit?.radiators || 0}</p>
+                <p className="text-[8px] uppercase tracking-widest text-ink/30 font-bold mt-2">Rads</p>
+              </div>
+            </div>
+            {report?.structuralAudit?.other && (
+              <p className="px-4 py-2 bg-accent/5 border-l border-accent text-[10px] text-accent/80 italic serif-italic">
+                "{report.structuralAudit.other}"
+              </p>
+            )}
+            <p className="text-[9px] text-ink/20 font-bold uppercase tracking-widest leading-relaxed">
+              * Audit based on provided floor plan. Verify counts if incorrect.
+            </p>
+          </section>
+
           <section className="p-8 rounded-2xl bg-paper border luxury-border space-y-8 sticky top-36 shadow-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -218,7 +345,19 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
               <span className="text-[10px] bg-ink text-white px-2 py-1 tracking-widest uppercase">Verified</span>
             </div>
 
-            <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-4 custom-scrollbar">
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <h4 className="text-[10px] uppercase tracking-widest font-bold text-ink/30 flex items-center gap-2">
+                  <Sparkles className="w-3 h-3" /> Visual Identity
+                </h4>
+                <p className="text-xs text-ink/60 leading-relaxed italic border-l border-accent/20 pl-4 py-1">
+                  {report?.visualIdentity}
+                </p>
+              </div>
+              <div className="h-px w-full bg-ink/5" />
+            </div>
+
+            <div className="space-y-6 overflow-y-auto max-h-[40vh] pr-4 custom-scrollbar">
               {report?.materialList.map((item, i) => (
                 <div key={i} className="space-y-2 group">
                   <div className="flex justify-between items-start">

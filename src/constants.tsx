@@ -1,6 +1,8 @@
 import React from 'react';
 import { RoomType, StyleType } from './types';
 
+export const APP_VERSION = '1.2.0';
+
 export const ROOM_TYPES: RoomType[] = [
   'Kitchen', 'Dining Room', 'Lounge Room', 'Pantry', 'Butler\'s Pantry', 
   'Laundry Room', 'Boot Room', 'Bedroom', 'Bathroom', 'En-suite'

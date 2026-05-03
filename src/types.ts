@@ -23,6 +23,7 @@ export interface RoomDesignData {
   style: StyleType;
   specificAnswers: Record<string, string>;
   existingFurniture: string;
+  architecturalFeatures?: string;
   referenceImages?: string[]; // Array of base64 images
   technicalBrief?: string;
 }
@@ -36,8 +37,12 @@ export interface ProjectData {
 
 export interface DesignReport {
   layoutDescription: string;
+  structuralAudit: { doors: number; windows: number; radiators: number; other: string };
   materialList: { name: string; quantity: string; dimensions: string }[];
   wallColors: { name: string; hex: string; brand: string }[];
+  visualIdentity: string;
   renderPrompt: string;
+  secondaryRenderPrompt: string;
   renderImageUrl?: string;
+  secondaryRenderImageUrl?: string;
 }

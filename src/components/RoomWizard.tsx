@@ -116,6 +116,16 @@ export default function RoomWizard({ onComplete, onBack }: RoomWizardProps) {
 
                 <div className="space-y-12 max-w-2xl mx-auto">
                   <div className="space-y-4">
+                    <label className="block text-[10px] uppercase tracking-widest text-ink/40 font-bold">Unmovable Architectural Features</label>
+                    <textarea 
+                      placeholder="e.g. 2 Windows with radiators (1m tall) under both, 1 Door (north wall), Victorian cornicing, original marble fireplace..."
+                      className="w-full bg-transparent border-b luxury-border py-4 focus:outline-none focus:border-accent transition-colors placeholder:text-ink/10 h-24 resize-none text-xl font-serif italic"
+                      value={currentRoom?.architecturalFeatures || ''}
+                      onChange={(e) => setCurrentRoom({ ...currentRoom, architecturalFeatures: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-4">
                     <label className="block text-[10px] uppercase tracking-widest text-ink/40 font-bold">Existing Furniture & Sentimental Items</label>
                     <textarea 
                       placeholder="e.g. A heritage 19th C dining table we wish to restore and keep..."
