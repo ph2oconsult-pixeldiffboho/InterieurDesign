@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { ProjectData, RoomDesignData, DesignReport } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -11,9 +11,12 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 5): Promise<T> {
     } catch (error: any) {
       lastError = error;
       const isRateLimit = error?.message?.includes("429") || error?.status === 429 || error?.code === 429;
-      if (isRateLimit && i < maxRetries - 1) {
-        const delay = Math.pow(2, i) * 2000 + Math.random() * 1000;
-        console.warn(`Rate limit hit. Retrying in ${Math.round(delay)}ms... (Attempt ${i + 1}/${maxRetries})`);
+      const isForbidden = error?.message?.includes("403") || error?.status === 403;
+      
+      // Retry on rate limits (429) OR transient forbidden errors (403 can sometimes be transient in preview environments)
+      if ((isRateLimit || isForbidden) && i < maxRetries - 1) {
+        const delay = Math.pow(2, i) * 3000 + Math.random() * 1000;
+        console.warn(`Gemini API Error (${isRateLimit ? '429' : '403'}). Retrying in ${Math.round(delay)}ms... (Attempt ${i + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -108,7 +111,6 @@ export async function analyzeRoomLayout(
       model: "gemini-3-flash-preview",
       contents: { parts },
       config: {
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
