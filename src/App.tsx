@@ -121,8 +121,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <div className="bg-red-500 text-white text-xs text-center py-1 font-bold tracking-wider">
-        DEVELOPMENT BUILD: API Key is exposed to the client. Do not deploy this URL publicly.
+      <div className="bg-red-500 text-white text-xs text-center py-1 font-bold tracking-wider relative">
+        <span>DEVELOPMENT BUILD: API Key is exposed to the client. Do not deploy this URL publicly.</span>
+        <span className="absolute right-4 opacity-80">v1.2.1-beta.2</span>
       </div>
       <AnimatePresence mode="wait">
         {step === 'welcome' && (

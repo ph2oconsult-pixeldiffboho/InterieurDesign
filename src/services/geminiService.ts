@@ -1,7 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ProjectData, RoomDesignData, DesignReport } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({ 
+  apiKey: typeof process !== 'undefined' && process.env ? process.env.GEMINI_API_KEY : import.meta.env.VITE_GEMINI_API_KEY, 
+  httpOptions: { apiVersion: 'v1beta' } 
+});
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } {
   if (!dataUrl.startsWith('data:')) {

@@ -27,10 +27,12 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
     
     if (message.includes("429") || err?.status === 429 || message.includes("RESOURCE_EXHAUSTED")) {
       message = "AI Studio Engine is at capacity. Your minute/daily quota has been reached. Please wait a moment or check your Gemini API plan.";
-    } else if (message.toLowerCase().includes("quota")) {
-      message = "Your Gemini API quota has been exceeded. Please check your billing details or wait for the quota to reset.";
     } else {
-      message = "Error details: " + message;
+      message = "Error details: " + JSON.stringify({
+        code: err?.status || err?.code,
+        message: err?.message || message,
+        status: err?.statusText || "UNKNOWN"
+      });
     }
     
     setErrorMessage(message);
@@ -47,10 +49,25 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
         if (cancelled) return;
         setStatus('rendering');
         
-        const renderUrl = await generateRoomRender(result.renderPrompt, project.floorPlanImage || undefined);
+        let renderUrl: string | undefined = undefined;
+        let secondaryUrl: string | undefined = undefined;
+        
+        try {
+          renderUrl = await generateRoomRender(result.renderPrompt, project.floorPlanImage || undefined);
+        } catch (err: any) {
+          console.error("Failed to generate primary render", err);
+        }
+        
         if (cancelled) return;
         
-        const secondaryUrl = await generateRoomRender(result.secondaryRenderPrompt, project.floorPlanImage || undefined);
+        try {
+          // Delay briefly to help with rate limits
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          secondaryUrl = await generateRoomRender(result.secondaryRenderPrompt, project.floorPlanImage || undefined);
+        } catch (err: any) {
+          console.error("Failed to generate secondary render", err);
+        }
+        
         if (cancelled) return;
 
         setReport({ 
@@ -77,8 +94,21 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
       const result = await refineRoomLayout(project, room, report, feedback);
       setStatus('rendering');
       
-      const renderUrl = await generateRoomRender(result.renderPrompt, project.floorPlanImage || undefined);
-      const secondaryUrl = await generateRoomRender(result.secondaryRenderPrompt, project.floorPlanImage || undefined);
+      let renderUrl: string | undefined = undefined;
+      let secondaryUrl: string | undefined = undefined;
+      
+      try {
+        renderUrl = await generateRoomRender(result.renderPrompt, project.floorPlanImage || undefined);
+      } catch (err: any) {
+        console.error("Failed to generate primary render", err);
+      }
+      
+      try {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        secondaryUrl = await generateRoomRender(result.secondaryRenderPrompt, project.floorPlanImage || undefined);
+      } catch (err: any) {
+        console.error("Failed to generate secondary render", err);
+      }
 
       setReport({ 
         ...result, 
@@ -266,6 +296,11 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                   />
+                ) : status === 'complete' ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center space-y-4 p-6 text-center">
+                    <p className="text-sm font-bold text-red-500/80">API Limit Reached</p>
+                    <p className="text-xs text-ink/40">The spatial analysis succeeded, but image generation was skipped due to Gemini API rate limits. Please check your Quota or select a paid key.</p>
+                  </div>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
                     <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -275,7 +310,8 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
                   <button 
                     onClick={() => downloadImage(report?.renderImageUrl, 'Primary')}
-                    className="px-8 py-4 bg-white text-ink text-xs uppercase tracking-widest font-bold flex items-center gap-3 active:scale-95 transition-transform"
+                    disabled={!report?.renderImageUrl}
+                    className="px-8 py-4 bg-white text-ink text-xs uppercase tracking-widest font-bold flex items-center gap-3 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Download className="w-4 h-4" /> Download Mood 01
                   </button>
@@ -298,6 +334,11 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                   />
+                ) : status === 'complete' ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center space-y-4 p-6 text-center">
+                    <p className="text-sm font-bold text-red-500/80">API Limit Reached</p>
+                    <p className="text-xs text-ink/40">The spatial analysis succeeded, but image generation was skipped due to Gemini API rate limits. Please check your Quota or select a paid key.</p>
+                  </div>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
                     <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
