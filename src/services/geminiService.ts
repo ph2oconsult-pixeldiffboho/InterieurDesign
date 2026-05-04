@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { ProjectData, RoomDesignData, DesignReport } from "../types";
 
 const ai = new GoogleGenAI({ 
-  apiKey: typeof process !== 'undefined' && process.env ? process.env.GEMINI_API_KEY : import.meta.env.VITE_GEMINI_API_KEY, 
+  apiKey: import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "", 
   httpOptions: { apiVersion: 'v1beta' } 
 });
 
