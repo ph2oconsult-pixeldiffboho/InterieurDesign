@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, ChevronLeft, Sparkles, Image as ImageIcon, X, Layout, Plus } from 'lucide-react';
+import { Upload, ChevronLeft, Sparkles, Image as ImageIcon, X, Layout, Plus, RotateCcw } from 'lucide-react';
 import { RoomDesignData, RoomType, StyleType } from '../types';
 import { ROOM_TYPES, STYLES, PROPERTY_PERIODS } from '../constants';
 import imageCompression from 'browser-image-compression';
@@ -8,11 +8,12 @@ import imageCompression from 'browser-image-compression';
 interface QuickStartWizardProps {
   onComplete: (data: RoomDesignData) => void;
   onBack: () => void;
+  onRestart: () => void;
   projectName: string;
   propertyAge: string;
 }
 
-export default function QuickStartWizard({ onComplete, onBack, projectName, propertyAge }: QuickStartWizardProps) {
+export default function QuickStartWizard({ onComplete, onBack, onRestart, projectName, propertyAge }: QuickStartWizardProps) {
   const [formData, setFormData] = useState<Partial<RoomDesignData>>({
     type: 'Lounge Room',
     style: 'english_townhouse',
@@ -28,7 +29,7 @@ export default function QuickStartWizard({ onComplete, onBack, projectName, prop
     if (files) {
       setIsCompressing(true);
       const newImages: string[] = [];
-      const options = { maxSizeMB: 0.5, maxWidthOrHeight: 1280, useWebWorker: true };
+      const options = { maxSizeMB: 0.5, maxWidthOrHeight: 1280, useWebWorker: false, fileType: 'image/jpeg' };
 
       try {
         for (let i = 0; i < files.length; i++) {
@@ -80,9 +81,14 @@ export default function QuickStartWizard({ onComplete, onBack, projectName, prop
             </div>
           </div>
           <div className="h-20 w-px bg-ink/10 hidden md:block" />
-          <div className="hidden md:block text-right">
-            <span className="text-accent uppercase text-[9px] tracking-[0.4em] font-bold">Studio Status</span>
-            <p className="text-xs font-mono mt-1">ENGINE_v3.2_READY</p>
+          <div className="hidden md:flex flex-col items-end justify-between">
+            <button onClick={onRestart} className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-ink/40 hover:text-accent transition-colors">
+              <RotateCcw className="w-3 h-3" /> Reset Project
+            </button>
+            <div className="text-right">
+              <span className="text-accent uppercase text-[9px] tracking-[0.4em] font-bold">Studio Status</span>
+              <p className="text-xs font-mono mt-1">ENGINE_v3.2_READY</p>
+            </div>
           </div>
         </div>
 

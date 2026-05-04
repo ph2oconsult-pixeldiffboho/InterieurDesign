@@ -11,6 +11,7 @@ import ReportView from './components/ReportView';
 import QuickStartWizard from './components/QuickStartWizard';
 import { ProjectData, RoomDesignData } from './types';
 import { AnimatePresence, motion } from 'motion/react';
+import { RotateCcw } from 'lucide-react';
 
 type WizardStep = 'welcome' | 'setup' | 'rooms' | 'quickstart' | 'report';
 
@@ -136,6 +137,7 @@ export default function App() {
               onComplete={handleSetupComplete} 
               onQuickStart={handleQuickStartInit}
               onBack={() => setStep('welcome')} 
+              onRestart={handleRestart}
             />
           </motion.div>
         )}
@@ -145,6 +147,7 @@ export default function App() {
             <RoomWizard 
               onComplete={handleRoomComplete} 
               onBack={() => setStep('setup')} 
+              onRestart={handleRestart}
             />
           </motion.div>
         )}
@@ -154,6 +157,7 @@ export default function App() {
             <QuickStartWizard 
               onComplete={handleRoomComplete}
               onBack={() => setStep('setup')}
+              onRestart={handleRestart}
               projectName={project.projectName}
               propertyAge={project.propertyAge}
             />

@@ -41,7 +41,7 @@ export default function Welcome({ onStart }: WelcomeProps) {
           <div className="space-y-3">
             <Layout className="w-6 h-6 text-accent" />
             <h3 className="font-semibold uppercase text-[11px] tracking-widest">Visual Fidelity</h3>
-            <p className="text-sm text-ink/60">Bespoke 3D renders generated for every room concept.</p>
+            <p className="text-sm text-ink/60">Atmosphere studies that capture the mood, palette, and period of every room.</p>
           </div>
         </div>
 

@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, Layout, Trash2, Plus, Sparkles, CheckCircle, Info, ChevronLeft } from 'lucide-react';
+import { ChevronRight, Layout, Trash2, Plus, Sparkles, CheckCircle, Info, ChevronLeft, RotateCcw } from 'lucide-react';
 import { RoomDesignData, RoomType, StyleType } from '../types';
 import { ROOM_TYPES, STYLES, ROOM_SPECIFIC_QUESTIONS } from '../constants';
 
 interface RoomWizardProps {
   onComplete: (room: RoomDesignData) => void;
   onBack: () => void;
+  onRestart: () => void;
 }
 
-export default function RoomWizard({ onComplete, onBack }: RoomWizardProps) {
+export default function RoomWizard({ onComplete, onBack, onRestart }: RoomWizardProps) {
   const [currentRoom, setCurrentRoom] = useState<Partial<RoomDesignData>>({ 
     specificAnswers: {}, 
     existingFurniture: '', 
@@ -38,6 +39,10 @@ export default function RoomWizard({ onComplete, onBack }: RoomWizardProps) {
 
         <button onClick={onBack} className="absolute top-12 left-12 p-3 hover:bg-ink hover:text-white rounded-full transition-all border luxury-border">
           <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <button onClick={onRestart} className="absolute top-12 right-12 flex items-center gap-2 text-ink/40 text-xs tracking-widest uppercase hover:text-ink transition-colors">
+          <RotateCcw className="w-4 h-4" /> Reset
         </button>
 
         <div className="mt-12">
@@ -176,7 +181,7 @@ export default function RoomWizard({ onComplete, onBack }: RoomWizardProps) {
                     onClick={saveRoom}
                     className="w-full max-w-2xl mx-auto py-6 bg-accent text-white text-xs tracking-widest uppercase hover:bg-ink transition-all flex items-center justify-center gap-4 shadow-xl"
                   >
-                    <Sparkles className="w-4 h-4" /> Commission Architecture Render
+                    <Sparkles className="w-4 h-4" /> Commission Design Study
                   </button>
                 </div>
               </motion.div>

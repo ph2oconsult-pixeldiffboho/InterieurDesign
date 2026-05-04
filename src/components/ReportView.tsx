@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Download, Package, Palette, Ruler, Sparkles, CheckCircle2, Layout, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Package, Palette, Ruler, Sparkles, CheckCircle2, Layout, Plus, RotateCcw } from 'lucide-react';
 import { APP_VERSION } from '../constants';
 import { ProjectData, RoomDesignData, DesignReport as IDesignReport } from '../types';
-import { analyzeRoomLayout, generateRoomRender } from '../services/geminiService';
+import { analyzeRoomLayout, generateRoomRender, refineRoomLayout } from '../services/geminiService';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
@@ -19,6 +19,23 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
   const [status, setStatus] = useState<'analyzing' | 'rendering' | 'complete' | 'error'>('analyzing');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [feedback, setFeedback] = useState("");
+
+  const handleError = (err: any) => {
+    console.error(err);
+    let message = err?.message || err?.toString() || "An unexpected error occurred during spatial analysis.";
+    
+    if (message.includes("429") || err?.status === 429 || message.includes("RESOURCE_EXHAUSTED")) {
+      message = "AI Studio Engine is at capacity. Your minute/daily quota has been reached. Please wait a moment or check your Gemini API plan.";
+    } else if (message.toLowerCase().includes("quota")) {
+      message = "Your Gemini API quota has been exceeded. Please check your billing details or wait for the quota to reset.";
+    } else {
+      message = "Error details: " + message;
+    }
+    
+    setErrorMessage(message);
+    setStatus('error');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -44,23 +61,36 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
         setStatus('complete');
       } catch (err: any) {
         if (cancelled) return;
-        console.error(err);
-        let message = "An unexpected error occurred during spatial analysis. This may be due to high demand or an issue with the floor plan clarity.";
-        
-        if (err?.message?.includes("429") || err?.status === 429 || err?.message?.includes("RESOURCE_EXHAUSTED")) {
-          message = "AI Studio Engine is at capacity. Your minute/daily quota has been reached. Please wait a moment or check your Gemini API plan.";
-        } else if (err?.message?.includes("quota")) {
-          message = "Your Gemini API quota has been exceeded. Please check your billing details or wait for the quota to reset.";
-        }
-        
-        setErrorMessage(message);
-        setStatus('error');
+        handleError(err);
       }
     };
     load();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleRefine = async () => {
+    if (!feedback.trim() || !report) return;
+    setStatus('analyzing');
+    setErrorMessage(null);
+    try {
+      const result = await refineRoomLayout(project, room, report, feedback);
+      setStatus('rendering');
+      
+      const renderUrl = await generateRoomRender(result.renderPrompt, project.floorPlanImage || undefined);
+      const secondaryUrl = await generateRoomRender(result.secondaryRenderPrompt, project.floorPlanImage || undefined);
+
+      setReport({ 
+        ...result, 
+        renderImageUrl: renderUrl, 
+        secondaryRenderImageUrl: secondaryUrl 
+      });
+      setStatus('complete');
+      setFeedback('');
+    } catch (err: any) {
+      handleError(err);
+    }
+  };
 
   const downloadImage = (url?: string, suffix: string = 'Primary') => {
     if (!url) return;
@@ -147,9 +177,10 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
   }
 
   if (status === 'analyzing' || status === 'rendering' || !report) {
+    const isRefining = !!report;
     const messages = {
-      analyzing: "Assessing original architecture and spatial heritage...",
-      rendering: "Crafting the 8K atmospheric 3D visualization...",
+      analyzing: isRefining ? "Refining the design based on your feedback..." : "Assessing original architecture and spatial heritage...",
+      rendering: isRefining ? "Regenerating 8K atmospheric 3D visualization..." : "Crafting the 8K atmospheric 3D visualization...",
       error: "Spatial analysis delayed. Re-initializing...",
       complete: "Finalizing architectural specs..."
     };
@@ -202,7 +233,9 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
           <button onClick={onDesignAnother} className="text-[11px] tracking-widest uppercase text-accent hover:text-ink transition-colors font-bold flex items-center gap-2 group">
             <Plus className="w-3 h-3 group-hover:rotate-90 transition-transform" /> Design Another Room
           </button>
-          <button onClick={onRestart} className="text-[11px] tracking-widest uppercase text-ink/30 hover:text-ink transition-colors font-bold">Exit Studio</button>
+          <button onClick={onRestart} className="text-[11px] tracking-widest uppercase text-ink/30 hover:text-ink transition-colors font-bold flex items-center gap-2">
+            <RotateCcw className="w-3 h-3" /> Reset Project
+          </button>
         </div>
       </header>
 
@@ -220,7 +253,7 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
           <section className="space-y-8">
             <div className="space-y-6">
               <div className="flex justify-between items-end">
-                <h3 className="text-xs uppercase tracking-[0.4em] font-bold text-ink/30">Primary Architectural Angle</h3>
+                <h3 className="text-xs uppercase tracking-[0.4em] font-bold text-ink/30">Primary Atmosphere Study</h3>
                 <span className="flex items-center gap-2 text-[10px] text-accent tracking-widest font-bold">
                   <Sparkles className="w-3 h-3" /> CONCEPT 01
                 </span>
@@ -244,7 +277,7 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
                     onClick={() => downloadImage(report?.renderImageUrl, 'Primary')}
                     className="px-8 py-4 bg-white text-ink text-xs uppercase tracking-widest font-bold flex items-center gap-3 active:scale-95 transition-transform"
                   >
-                    <Download className="w-4 h-4" /> Download View 01
+                    <Download className="w-4 h-4" /> Download Mood 01
                   </button>
                 </div>
               </div>
@@ -252,7 +285,7 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
 
             <div className="space-y-6">
               <div className="flex justify-between items-end">
-                <h3 className="text-xs uppercase tracking-[0.4em] font-bold text-ink/30">Reverse Perspective View</h3>
+                <h3 className="text-xs uppercase tracking-[0.4em] font-bold text-ink/30">Secondary Mood Study</h3>
                 <span className="flex items-center gap-2 text-[10px] text-ink/20 tracking-widest font-bold">
                   CONCEPT 02
                 </span>
@@ -276,12 +309,21 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
                     onClick={() => downloadImage(report?.secondaryRenderImageUrl, 'Reverse')}
                     className="px-8 py-4 bg-white text-ink text-xs uppercase tracking-widest font-bold flex items-center gap-3 active:scale-95 transition-transform"
                   >
-                    <Download className="w-4 h-4" /> Download View 02
+                    <Download className="w-4 h-4" /> Download Mood 02
                   </button>
                 </div>
               </div>
             </div>
           </section>
+
+          <aside className="px-6 py-4 bg-accent/5 border-l-2 border-accent/40 rounded-r">
+            <p className="text-[11px] text-ink/60 leading-relaxed font-serif italic">
+              These visuals are <span className="not-italic font-bold text-ink/80">atmosphere studies</span> — 
+              they illustrate the proposed style, palette, materials, and mood. For dimensionally accurate 
+              spatial planning, refer to the Structural Audit and Bill of Materials. The renders should be 
+              treated as inspiration, not blueprints.
+            </p>
+          </aside>
 
           <section className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-12 border-t luxury-border">
             <div className="space-y-8">
@@ -324,6 +366,31 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
                 ))}
               </div>
             </div>
+
+            <div className="space-y-8 md:col-span-2 pt-8 border-t luxury-border">
+              <div className="flex items-center gap-3 border-b border-accent/20 pb-4">
+                <Sparkles className="w-5 h-5 text-accent" />
+                <h3 className="text-[11px] uppercase tracking-widest font-bold">Refine Design</h3>
+              </div>
+              <div className="space-y-4">
+                <p className="text-xs text-ink/60 font-serif italic">
+                  Not quite right? Provide feedback to adjust the layout, color palette, or overall mood, and we will regenerate the concept.
+                </p>
+                <textarea 
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  placeholder="e.g. 'The palette is too dark, make it lighter' or 'Remove the cupboards on the left wall to make it less cramped'"
+                  className="w-full bg-white border luxury-border p-4 min-h-[100px] text-sm font-serif resize-y focus:outline-none focus:border-accent transition-colors"
+                />
+                <button 
+                  onClick={handleRefine}
+                  disabled={!feedback.trim()}
+                  className="px-8 py-4 bg-ink text-white text-xs uppercase tracking-widest font-bold disabled:opacity-50 hover:bg-accent transition-colors block ml-auto"
+                >
+                  Regenerate Concept
+                </button>
+              </div>
+            </div>
           </section>
         </div>
 
@@ -333,7 +400,7 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
           <section className="p-8 rounded-2xl bg-white border luxury-border space-y-6 shadow-sm">
             <div className="flex items-center gap-3">
               <Ruler className="w-5 h-5 text-accent" />
-              <h3 className="text-[11px] uppercase tracking-widest font-bold">Structural Audit</h3>
+              <h3 className="text-[11px] uppercase tracking-widest font-bold">Structural Audit <span className="text-accent font-normal italic"> — Dimensional Truth</span></h3>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center p-3 bg-ink/[0.02] border border-ink/[0.05]">
@@ -371,7 +438,7 @@ export default function ReportView({ project, room, onDesignAnother, onRestart }
               </p>
             )}
             <p className="text-[9px] text-ink/20 font-bold uppercase tracking-widest leading-relaxed">
-              * Audit based on provided floor plan. Verify counts if incorrect.
+              * This audit is the dimensional source of truth. The renders above are stylistic; trust these counts.
             </p>
           </section>
 

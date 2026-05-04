@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, ChevronRight, Map, Calendar, ArrowLeft, Sparkles } from 'lucide-react';
+import { Upload, ChevronRight, Map, Calendar, ArrowLeft, Sparkles, RotateCcw } from 'lucide-react';
 import { ProjectData } from '../types';
 import { PROPERTY_PERIODS } from '../constants';
 
@@ -10,9 +10,10 @@ interface ProjectSetupProps {
   onComplete: (data: Partial<ProjectData>) => void;
   onQuickStart: (data: Partial<ProjectData>) => void;
   onBack: () => void;
+  onRestart: () => void;
 }
 
-export default function ProjectSetup({ onComplete, onQuickStart, onBack }: ProjectSetupProps) {
+export default function ProjectSetup({ onComplete, onQuickStart, onBack, onRestart }: ProjectSetupProps) {
   const [step, setStep] = useState(1);
   const [isCompressing, setIsCompressing] = useState(false);
   const [formData, setFormData] = useState({
@@ -29,7 +30,8 @@ export default function ProjectSetup({ onComplete, onQuickStart, onBack }: Proje
         const options = {
           maxSizeMB: 0.5,
           maxWidthOrHeight: 1280,
-          useWebWorker: true,
+          useWebWorker: false,
+          fileType: 'image/jpeg',
         };
         const compressedFile = await imageCompression(file, options);
         const reader = new FileReader();
@@ -62,9 +64,14 @@ export default function ProjectSetup({ onComplete, onQuickStart, onBack }: Proje
   return (
     <div className="min-h-screen p-8 md:p-24 flex flex-col items-center">
       <div className="w-full max-w-xl">
-        <button onClick={prev} className="flex items-center gap-2 text-ink/40 text-xs tracking-widest uppercase mb-12 hover:text-ink transition-colors">
-          <ArrowLeft className="w-3 h-3" /> Back
-        </button>
+        <div className="flex justify-between items-center mb-12">
+          <button onClick={prev} className="flex items-center gap-2 text-ink/40 text-xs tracking-widest uppercase hover:text-ink transition-colors">
+            <ArrowLeft className="w-3 h-3" /> Back
+          </button>
+          <button onClick={onRestart} className="flex items-center gap-2 text-ink/40 text-xs tracking-widest uppercase hover:text-ink transition-colors">
+            <RotateCcw className="w-3 h-3" /> Reset
+          </button>
+        </div>
 
         <div className="flex gap-2 mb-12">
           {[1, 2, 3].map(i => (
