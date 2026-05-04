@@ -1,12 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ProjectData, RoomDesignData, DesignReport } from "../types";
 
-// User's provided Pro key (split to bypass static secret scanners)
-const p1 = "AIzaSyBioo_UmT";
-const p2 = "bBTma_RfaOjbag";
-const p3 = "GUXb66MVDK8";
-const apiKey = process.env.GEMINI_API_KEY || (p1 + p2 + p3);
-const ai = new GoogleGenAI({ apiKey });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } {
   if (!dataUrl.startsWith('data:')) {
